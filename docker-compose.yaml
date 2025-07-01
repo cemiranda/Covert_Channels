@@ -1,0 +1,32 @@
+version: '3.8'
+
+networks:
+  mynet:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+
+services:
+  server:
+    build:
+      context: .
+    container_name: ubuntu_server
+    environment:
+      - PYTHONUNBUFFERED=1
+    networks:
+      mynet:
+        ipv4_address: 172.28.0.2
+    command: python3 server.py
+
+  client:
+    build:
+      context: .
+    container_name: ubuntu_client
+    environment:
+      - PYTHONUNBUFFERED=1
+    networks:
+      mynet:
+        ipv4_address: 172.28.0.3
+    command: python3 client.py
+
