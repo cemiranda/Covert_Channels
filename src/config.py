@@ -3,10 +3,15 @@
 MARKER = b"C2START"
 KEY = b"P8XpZKAAVB3-SeRChZUH1OFX9GcVV3KQjZtHVSHvP-E="
 
-# Legit "github" server
-LEGIT_SERVER = "172.20.0.4"
-LEGIT_PORT = 443
+# Used to try to prevent scapy seeing the same packets
+SENDER_LEFT_MAC = "08:00:27:e4:c8:2a"
+SENDER_RIGHT_MAC = "08:00:27:22:15:7b"
+RECEIVER_LEFT_MAC = "08:00:27:fa:69:30"
+RECEIVER_RIGHT_MAC = "08:00:27:e1:9e:e7"
 
-# Malicious server posing as github
-TARGET_IP = "172.20.0.3"
-TARGET_PORT = 8443
+SERVER_MAC = "08:00:27:f9:32:85"
+SERVER_IP = "10.0.4.10"
+SERVER_PORT = 443
+
+CLIENT_MAC = "08:00:27:3c:9c:d8"
+CLIENT_IP = "10.0.2.2"
