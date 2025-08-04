@@ -40,6 +40,8 @@ We setup the channel using 4 VMS:
 ## Routing
 In order to properly route traffic, we put in ip routes to avoid the traffic being sent to the internet or the wrong location. Additionally, adding in iptables rules allowed for more fine tuned configuration and prevented duplicated packets from being observed.
 
+We also made a set of client and server certificates as well as a self signed CA cert in order to properly setup an HTTPS connection and verify there was no obvious issues with our tampering of the packets. Because of how the certs are utilized, the IP address of the server must be the same or new certs must be generated.
+
 The client sends requests that get forwarder to the malicious server. The malicious server in a real world example would be a compromised network device such as a router or firewall that allows the malicious server to intercept and inspect packets. The malicious server then forwards it onto the malicious receiver who checks the payload for covert data. If covert data is found, the receiver takes it off the packet, prints it and forwards the packet on to the server. 
 
 This network topology would be common for any internal network or external facing network which relies on multiple hops to tranmit packets.
