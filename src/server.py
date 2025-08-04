@@ -14,6 +14,7 @@ class SimpleHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "application/json")
         self.end_headers()
         self.wfile.write(b'{"status":"success"}')
+        self.close_connection = True
 
     def log_message(self, fmt, *args):
         # suppress default logging
@@ -23,6 +24,8 @@ if __name__ == "__main__":
     
     ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     ctx.load_cert_chain(certfile="./certs/server.crt", keyfile="./certs/server.key")
+    ctx.load_verify_locations(cafile="./certs/ca.crt")
+    ctx.verify_mode = ssl.CERT_REQUIRED
 
     httpd = HTTPServer(LISTEN_ADDR, SimpleHandler)
     httpd.socket = ctx.wrap_socket(httpd.socket, server_side=True)
